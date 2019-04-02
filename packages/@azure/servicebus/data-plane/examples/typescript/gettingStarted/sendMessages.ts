@@ -6,7 +6,7 @@
   to learn about Queues, Topics and Subscriptions.
 */
 
-import { Namespace, SendableMessageInfo } from "@azure/service-bus";
+import { Namespace, SendableMessageInfo } from "../../../lib";
 
 // Define connection string and related Service Bus entity names here
 const connectionString = "";

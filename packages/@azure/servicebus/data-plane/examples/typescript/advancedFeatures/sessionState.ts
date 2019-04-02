@@ -16,7 +16,7 @@
   to learn about session state.
 */
 
-import { Namespace } from "@azure/service-bus";
+import { Namespace } from "../../../lib";
 
 // Define connection string and related Service Bus entity names here
 const connectionString = "";

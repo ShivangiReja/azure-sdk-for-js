@@ -10,7 +10,7 @@
     Here, assign "owner" role to your account.
 */
 
-import { Namespace } from "@azure/service-bus";
+import { Namespace } from "../../../lib";
 import { loginWithUsernamePassword } from "ms-rest-azure";
 
 // Define Service Bus Endpoint here and related entity names here

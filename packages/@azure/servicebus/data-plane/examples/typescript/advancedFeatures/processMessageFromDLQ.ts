@@ -6,7 +6,7 @@
   to the Dead Letter Queue
 */
 
-import { ServiceBusMessage, Namespace } from "@azure/service-bus";
+import { ServiceBusMessage, Namespace } from "../../../lib";
 
 // Define connection string and related Service Bus entity names here
 const connectionString = "";

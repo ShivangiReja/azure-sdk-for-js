@@ -8,7 +8,7 @@
   message deferral.
 */
 
-import { Namespace, OnMessage, OnError, delay } from "@azure/service-bus";
+import { Namespace, OnMessage, OnError, delay } from "../../../lib";
 
 // Define connection string and related Service Bus entity names here
 const connectionString = "";

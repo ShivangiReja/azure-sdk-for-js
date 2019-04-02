@@ -6,7 +6,7 @@
   to learn about scheduling messages.
 */
 
-import { Namespace, SendableMessageInfo, OnMessage, OnError } from "@azure/service-bus";
+import { Namespace, SendableMessageInfo, OnMessage, OnError } from "../../../lib";
 import { delay } from "rhea-promise";
 
 // Define connection string and related Service Bus entity names here

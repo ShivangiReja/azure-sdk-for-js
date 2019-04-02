@@ -7,7 +7,9 @@ const queueName = "testqueue";
 
 const numberOfMessages = 11000;
 let consecutiveZeroMessagesCount = 0;
-const maxConsecutiveZeroMessagesCount = 100;
+const maxConsecutiveZeroMessagesCount = 3;
+let consecutiveTimeoutExeptionsCount = 0;
+const maxConsecutiveTimeoutExeptionsCount = 3;
 let totalMessagesPurged = 0;
 const ns = Namespace.createFromConnectionString(connectionString);
 
@@ -42,42 +44,43 @@ async function main(): Promise<void> {
 }
 
 async function purgeMessages(): Promise<void> {
-  const client = ns.createQueueClient(queueName);
-  const receiver = client.getReceiver({ receiveMode: ReceiveMode.receiveAndDelete });
+  const queueClient = ns.createQueueClient(queueName);
+  const receiverParameters = {
+    receiveMode: ReceiveMode.receiveAndDelete
+  };
+  let receiver = null;
   let continueLoop = true;
-  const list: any[] = [];
-  for (let index = 0; index < numberOfMessages; index++) {
-    list.push("Message " + index);
-  }
-  // let count = 0;
   do {
-    // if (count === 2) {
-    //   break;
-    // }
-    // count++;
-    console.log("#################################################################");
-    // receiver = receiverClient.getReceiver({ receiveMode: ReceiveMode.receiveAndDelete });
-    const messages = await receiver.receiveBatch(numberOfMessages / 10, 10);
-    messages.forEach((element: any) => {
-      list.splice(list.indexOf(element.body), 1);
-    });
-    const deletedMessagesCount = messages.length;
-    totalMessagesPurged += deletedMessagesCount;
-    console.log(
-      "totalMessagesPurged = " + totalMessagesPurged + ", yet to receive = " + list.length
-    );
-    if (deletedMessagesCount === 0) {
-      consecutiveZeroMessagesCount++;
-      console.log("yet to receive = " + list);
-      await delay(5000);
-      if (consecutiveZeroMessagesCount > maxConsecutiveZeroMessagesCount) {
-        continueLoop = false;
+    try {
+      receiver = queueClient.getReceiver(receiverParameters);
+      const messages = await receiver.receiveBatch(1000, 5);
+      console.log(`Received message length ${messages.length}`);
+      const deletedMessagesCount = messages.length;
+      if (deletedMessagesCount === 0) {
+        consecutiveZeroMessagesCount++;
+        if (consecutiveZeroMessagesCount > maxConsecutiveZeroMessagesCount) {
+          continueLoop = false;
+        }
+      } else {
+        consecutiveZeroMessagesCount = 0;
+        totalMessagesPurged += deletedMessagesCount;
       }
-    } else {
-      consecutiveZeroMessagesCount = 0;
+    } catch (error) {
+      if (error.name && error.name.toLowerCase() === "operationtimeouterror") {
+        consecutiveTimeoutExeptionsCount++;
+        if (consecutiveTimeoutExeptionsCount > maxConsecutiveTimeoutExeptionsCount) {
+          continueLoop = false;
+        }
+      } else {
+        continueLoop = false;
+        consecutiveTimeoutExeptionsCount = 0;
+      }
+    } finally {
+      if (receiver !== null) {
+        await receiver.close();
+        receiver = null;
+      }
     }
-    // await delay(3000);
-    // await receiver.close();
   } while (continueLoop);
 }
 
