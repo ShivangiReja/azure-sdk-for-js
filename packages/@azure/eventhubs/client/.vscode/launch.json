@@ -24,12 +24,12 @@
             "type": "node",
             "request": "launch",
             "name": "Client Example",
-            "program": "${workspaceFolder}/examples/simpleSender.ts",
+            "program": "${file}",
             "preLaunchTask": "npm: build-samples",
             "outFiles": [
                 "${workspaceFolder}/dist-esm/**/*.js"
             ],
-            "envFile": "${workspaceFolder}/.env" // You can take a look at the sample.env file for supported environment variables.
+            // "envFile": "${workspaceFolder}/.env" // You can take a look at the sample.env file for supported environment variables.
         }
     ]
 }
