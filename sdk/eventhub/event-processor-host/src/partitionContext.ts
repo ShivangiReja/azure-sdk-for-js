@@ -88,6 +88,7 @@ export class PartitionContext {
       sequenceNumber: this._sequenceNumber
     };
     const withHostAndPartiton = this._context.withHostAndPartition;
+    console.log(`inside checkpoint() sequenceNumber ${this._sequenceNumber}`);
     log.partitionContext(withHostAndPartiton(this, "Checkpointing: %O"), capturedCheckpoint);
     await this._context.checkpointLock.acquire(this._context.checkpointLockId, () => {
       return this._persistCheckpoint(capturedCheckpoint);
@@ -147,9 +148,9 @@ export class PartitionContext {
     try {
       const inStoreCheckpoint = await this._context.checkpointManager.getCheckpoint(checkpoint.partitionId);
       if (inStoreCheckpoint && inStoreCheckpoint.sequenceNumber >= checkpoint.sequenceNumber) {
-        const msg = `Ignoring out of date checkpoint with offset: '${checkpoint.offset}', ` +
-          `sequenceNumber: ${checkpoint.sequenceNumber} because currently persisted checkpoint ` +
-          ` has higher offset '${inStoreCheckpoint.offset}', sequenceNumber ` +
+        const msg = `Ignoring out of date checkpoint with current offset: '${checkpoint.offset}', ` +
+          `current sequenceNumber: ${checkpoint.sequenceNumber} because currently persisted stored checkpoint ` +
+          ` has higher stored offset '${inStoreCheckpoint.offset}', stored sequenceNumber ` +
           `${inStoreCheckpoint.sequenceNumber}.`;
         log.error(withHostAndPartiton(this, "%s"), msg);
         throw new Error(msg);

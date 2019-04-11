@@ -5,10 +5,9 @@ import { EventHubClient, EventData, delay } from "@azure/event-hubs";
 import dotenv from "dotenv";
 dotenv.config();
 
-const connectionString = "EVENTHUB_CONNECTION_STRING";
-const entityPath = "EVENTHUB_NAME";
-const str = process.env[connectionString] || "";
-const path = process.env[entityPath] || "";
+
+const str = "Endpoint=sb://shivangieventhubs.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=mHuzn4laFeLg25QlzhL7Fe0IfJzkEiqsTZZyAS2z12M=";
+const path ="testeventhubs";
 
 
 async function main(): Promise<void> {
@@ -19,7 +18,7 @@ async function main(): Promise<void> {
   const partitionIds = await client.getPartitionIds();
   const messageCount = 300;
   const data: EventData[] = [];
-  for (let i = 0; i < messageCount; i++) {
+  for (let i = 1; i <= messageCount; i++) {
     const obj: EventData = { body: `Hello foo ${i}` };
     data.push(obj);
   }

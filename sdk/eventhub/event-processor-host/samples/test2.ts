@@ -1,15 +1,12 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
-
 import {
   EventProcessorHost, OnReceivedError, OnReceivedMessage, EventData, PartitionContext, delay
 } from "@azure/event-processor-host";
 import dotenv from "dotenv";
 dotenv.config();
 
-const path = "testeventhubs";
-const storageCS = "DefaultEndpointsProtocol=https;AccountName=shivangirejastorage;AccountKey=BcYIFj9D4jlFs6rnB8ZxruW/siUkw3gFE/55xiEPjQrWmRHpcZc2biACCfLr5WVZGDqj68gwMBNsgOtzIwACaQ==;EndpointSuffix=core.windows.net";
-const ehCS = "Endpoint=sb://shivangieventhubs.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=mHuzn4laFeLg25QlzhL7Fe0IfJzkEiqsTZZyAS2z12M=";
+const path = process.env.EVENTHUB_NAME;
+const storageCS = process.env.STORAGE_CONNECTION_STRING;
+const ehCS = process.env.EVENTHUB_CONNECTION_STRING;
 // creates a unique storageContainer name for every run
 // if you wish to keep the name same between different runs then use the following then that is fine as well.
 const storageContainerName = EventProcessorHost.createHostName("test-container");
@@ -23,9 +20,9 @@ async function main(): Promise<void> {
   // Post that you can run this sample to start the EPH and see it in action.
   // 1. Start eph.
   const eph = await startEph(ephName);
-  // 2. Sleeeping for 180 seconds. This will give time for eph to receive messages.
+  // 2. Sleeeping for 90 seconds. This will give time for eph to receive messages.
   await sleep(180);
-  // 3. After 180 seconds stop eph.
+  // 3. After 90 seconds stop eph.
   await stopEph(eph);
 }
 
@@ -70,7 +67,7 @@ async function startEph(ephName: string): Promise<EventProcessorHost> {
       : partionCount[context.partitionId]++;
       const num = partionCount[context.partitionId];
      try {
-        console.log("$$$$ Attempting to checkpoint message number %d sequenceNumber %d Number of partitions: %O", num, eventData.sequenceNumber, eph.receivingFromPartitions.length);
+        console.log("$$$$ Attempting to checkpoint message number %d sequenceNumber %d partitions number: %O", num, eventData.sequenceNumber, eph.receivingFromPartitions.length);
         await context.checkpointFromEventData(eventData);
         console.log("$$$$ [%s] Successfully checkpointed message number %d", ephName, num);
       } catch (err) {
@@ -83,6 +80,7 @@ async function startEph(ephName: string): Promise<EventProcessorHost> {
   };
   console.log(">>>>>> Starting the EPH - %s", ephName);
   await eph.start(onMessage, onError);
+  await delay(30000);
   return eph;
 }
 

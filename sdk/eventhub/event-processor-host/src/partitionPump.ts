@@ -86,7 +86,10 @@ export class PartitionPump {
       epoch: this._lease.epoch
     };
     const onMessage: OnMessage = (eventData: EventData) => {
-      this._partitionContext.setOffsetAndSequenceNumber(eventData);
+      console.log(`****ParitionPump - Event Data sequence number ${eventData.sequenceNumber!} `);
+       this._partitionContext.setOffsetAndSequenceNumber(eventData);
+      // const newContext = new PartitionContext(this._context, this._lease.partitionId, this._lease);
+      // newContext.setOffsetAndSequenceNumber(eventData);
       this._onMessage(this._partitionContext, eventData);
     };
     const onError: OnError = async (error: MessagingError | Error) => {
