@@ -17,9 +17,10 @@ const path = process.env[entityPath] || "";
 const proxy = 'http://localhost:3128';
 
 // create an instance of the `HttpsProxyAgent` class with the proxy server information
-const options = url.parse(proxy);
+const proxyOpts = url.parse(proxy);
+proxyOpts.auth = 'username:password';
 
-const proxyAgent = new httpsProxyAgent(options);
+const proxyAgent = new httpsProxyAgent(proxyOpts);
 
 async function main(): Promise<void> {
   console.log("calling createFromConnectionString");
