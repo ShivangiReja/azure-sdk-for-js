@@ -25,7 +25,7 @@ import {
   Constants,
   randomNumberFromInterval
 } from "@azure/amqp-common";
-import { SendableMessageInfo } from "../serviceBusMessage";
+import { SendableMessageInfo, toAmqpMessage } from "../serviceBusMessage";
 import { ClientEntityContext } from "../clientEntityContext";
 import { LinkEntity } from "./linkEntity";
 import { getUniqueName } from "../util/utils";
@@ -139,7 +139,7 @@ export class MessageSender extends LinkEntity {
             this.name,
             this.address
           );
-          await this.detached(senderError);
+          await this.onDetached(senderError);
         } else {
           log.error(
             "[%s] 'sender_close' event occurred on the sender '%s' with address '%s' " +
@@ -185,7 +185,7 @@ export class MessageSender extends LinkEntity {
             this.name,
             this.address
           );
-          await this.detached(sessionError);
+          await this.onDetached(sessionError);
         } else {
           log.error(
             "[%s] 'session_close' event occurred on the session of sender '%s' with " +
@@ -214,7 +214,7 @@ export class MessageSender extends LinkEntity {
    * @param {AmqpError | Error} [senderError] The sender error if any.
    * @returns {Promise<void>} Promise<void>.
    */
-  async detached(senderError?: AmqpError | Error): Promise<void> {
+  async onDetached(senderError?: AmqpError | Error): Promise<void> {
     try {
       const wasCloseInitiated = this._sender && this._sender.isItselfClosed();
       // Clears the token renewal timer. Closes the link and its session if they are open.
@@ -350,7 +350,7 @@ export class MessageSender extends LinkEntity {
           return this._init();
         });
       }
-      const message = SendableMessageInfo.toAmqpMessage(data);
+      const message = toAmqpMessage(data);
       message.body = this._context.namespace.dataTransformer.encode(data.body);
       return await this._trySend(message);
     } catch (err) {
@@ -393,7 +393,7 @@ export class MessageSender extends LinkEntity {
       const messages: AmqpMessage[] = [];
       // Convert Message to AmqpMessage.
       for (let i = 0; i < inputMessages.length; i++) {
-        const message = SendableMessageInfo.toAmqpMessage(inputMessages[i]);
+        const message = toAmqpMessage(inputMessages[i]);
         message.body = this._context.namespace.dataTransformer.encode(inputMessages[i].body);
         messages[i] = message;
       }
@@ -491,10 +491,14 @@ export class MessageSender extends LinkEntity {
           let onAccepted: Func<EventContext, void>;
           const removeListeners = (): void => {
             clearTimeout(waitTimer);
-            this._sender!.removeListener(SenderEvents.rejected, onRejected);
-            this._sender!.removeListener(SenderEvents.accepted, onAccepted);
-            this._sender!.removeListener(SenderEvents.released, onReleased);
-            this._sender!.removeListener(SenderEvents.modified, onModified);
+            // When `removeListeners` is called on timeout, the sender might be closed and cleared
+            // So, check if it exists, before removing listeners from it.
+            if (this._sender) {
+              this._sender.removeListener(SenderEvents.rejected, onRejected);
+              this._sender.removeListener(SenderEvents.accepted, onAccepted);
+              this._sender.removeListener(SenderEvents.released, onReleased);
+              this._sender.removeListener(SenderEvents.modified, onModified);
+            }
           };
 
           onAccepted = (context: EventContext) => {

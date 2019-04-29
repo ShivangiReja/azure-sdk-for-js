@@ -23,17 +23,20 @@ import {
  */
 export class Sender {
   /**
-   * @property {ClientEntityContext} _context Describes the amqp connection context for the Client.
+   * @property Describes the amqp connection context for the Client.
    */
   private _context: ClientEntityContext;
+  /**
+   * @property Denotes if close() was called on this sender
+   */
   private _isClosed: boolean = false;
 
   /**
-   * @property {boolean} [isClosed] Denotes if close() was called on this sender.
+   * @property Returns `true` if either the sender or the client that created it has been closed
    * @readonly
    */
   public get isClosed(): boolean {
-    return this._isClosed;
+    return this._isClosed || this._context.isClosed;
   }
 
   /**
@@ -62,8 +65,9 @@ export class Sender {
    * Sends the given messages in a single batch i.e. in a single AMQP message after creating an AMQP
    * Sender link if it doesnt already exists.
    *
-   * To send messages to a `session` and/or `partition` enabled Queue/Topic, set the `sessionId`
-   * and/or `partitionKey` properties respectively on the messages. When doing so, all
+   * - To send messages to a `session` and/or `partition` enabled Queue/Topic, set the `sessionId`
+   * and/or `partitionKey` properties respectively on the messages.
+   * - When doing so, all
    * messages in the batch should have the same `sessionId` (if using sessions) and the same
    * `parititionKey` (if using paritions).
    *
@@ -98,10 +102,16 @@ export class Sender {
     );
     throwTypeErrorIfParameterMissing(this._context.namespace.connectionId, "message", message);
 
+    let senderName;
+    if (this._context.sender) {
+      senderName = this._context.sender.name;
+    }
+
     const messages = [message];
     const result = await this._context.managementClient!.scheduleMessages(
       scheduledEnqueueTimeUtc,
-      messages
+      messages,
+      senderName
     );
     return result[0];
   }
@@ -131,7 +141,16 @@ export class Sender {
       messages = [messages];
     }
 
-    return this._context.managementClient!.scheduleMessages(scheduledEnqueueTimeUtc, messages);
+    let senderName;
+    if (this._context.sender) {
+      senderName = this._context.sender.name;
+    }
+
+    return this._context.managementClient!.scheduleMessages(
+      scheduledEnqueueTimeUtc,
+      messages,
+      senderName
+    );
   }
 
   /**
@@ -151,12 +170,18 @@ export class Sender {
       "sequenceNumber",
       sequenceNumber
     );
-    return this._context.managementClient!.cancelScheduledMessages([sequenceNumber]);
+
+    let senderName;
+    if (this._context.sender) {
+      senderName = this._context.sender.name;
+    }
+
+    return this._context.managementClient!.cancelScheduledMessages([sequenceNumber], senderName);
   }
 
   /**
-   * Cancels an array of messages that were scheduled to appear on a ServiceBus Queue/Subscription.
-   * @param sequenceNumbers - An Array of sequence numbers of the message to be cancelled.
+   * Cancels multiple messages that were scheduled to appear on a ServiceBus Queue/Subscription.
+   * @param sequenceNumbers - An Array of sequence numbers of the messages to be cancelled.
    * @returns Promise<void>
    */
   async cancelScheduledMessages(sequenceNumbers: Long[]): Promise<void> {
@@ -174,7 +199,13 @@ export class Sender {
       "sequenceNumbers",
       sequenceNumbers
     );
-    return this._context.managementClient!.cancelScheduledMessages(sequenceNumbers);
+
+    let senderName;
+    if (this._context.sender) {
+      senderName = this._context.sender.name;
+    }
+
+    return this._context.managementClient!.cancelScheduledMessages(sequenceNumbers, senderName);
   }
 
   /**
@@ -207,10 +238,11 @@ export class Sender {
 
   private _throwIfSenderOrConnectionClosed(): void {
     throwErrorIfConnectionClosed(this._context.namespace);
-    if (this._isClosed) {
+    if (this.isClosed) {
       const errorMessage = getSenderClosedErrorMsg(
         this._context.entityPath,
-        this._context.clientType
+        this._context.clientType,
+        this._context.isClosed
       );
       const error = new Error(errorMessage);
       log.error(`[${this._context.namespace.connectionId}] %O`, error);
