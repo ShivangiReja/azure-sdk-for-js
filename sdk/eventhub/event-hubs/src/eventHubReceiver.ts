@@ -498,7 +498,7 @@ export class EventHubReceiver extends LinkEntity {
           operation: () =>
             this._init(options).then(async () => {
               if (this._receiver && this._type === "BatchingReceiver") {
-                this._receiver.addCredit(this._maxMessageCount!);
+                this._receiver.addCredit(this._messageRecoveryCount!);
               }
             }),
           connectionId: this._context.connectionId,
