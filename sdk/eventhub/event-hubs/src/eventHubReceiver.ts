@@ -181,7 +181,8 @@ export class EventHubReceiver extends LinkEntity {
    */
   protected _aborter: Aborter | undefined;
   /**
-   * @property {number| undefined} _messageRecoveryCount This is used to add credits from incase of recovery.
+   * @property {number| undefined} _messageRecoveryCount The message recovery count.
+   * This is used to add credits from incase of recovery.
    */
   protected _messageRecoveryCount: number | undefined;
 
