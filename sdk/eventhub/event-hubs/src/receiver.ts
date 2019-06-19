@@ -3,7 +3,7 @@
 
 import * as log from "./log";
 import { ConnectionContext } from "./connectionContext";
-import { EventReceiverOptions } from "./eventHubClient";
+import { EventHubConsumerOptions } from "./eventHubClient";
 import { OnMessage, OnError } from "./eventHubReceiver";
 import { ReceivedEventData } from "./eventData";
 import { Constants } from "@azure/core-amqp";
@@ -29,22 +29,30 @@ export interface EventIteratorOptions {
 
 /**
  * The Receiver class can be used to receive messages in a batch or by registering handlers.
- * Use the `createReceiver` function on the QueueClient or SubscriptionClient to instantiate a Receiver.
+ * Use the `createConsumer` function on the QueueClient or SubscriptionClient to instantiate a Receiver.
  * The Receiver class is an abstraction over the underlying AMQP receiver link.
  * @class Receiver
  */
-export class EventReceiver {
+export class EventHubConsumer {
   /**
    * @property Describes the amqp connection context for the QueueClient.
    */
   private _context: ConnectionContext;
+  /**
+   * @property The consumer group from which the receiver should receive events from.
+   */
+  private _consumerGroup: string;
+  /**
+   * @property The event position in the partition at which to start receiving messages.
+   */
+  private _eventPosition: EventPosition;
   /**
    * @property {boolean} [_isClosed] Denotes if close() was called on this receiver
    */
   private _isClosed: boolean = false;
 
   private _partitionId: string;
-  private _receiverOptions: EventReceiverOptions;
+  private _receiverOptions: EventHubConsumerOptions;
   private _streamingReceiver: StreamingReceiver | undefined;
   private _batchingReceiver: BatchingReceiver | undefined;
 
@@ -71,24 +79,32 @@ export class EventReceiver {
    * events from.
    * @readonly
    */
-  get consumerGroup(): string | undefined {
-    return this._receiverOptions && this._receiverOptions.consumerGroup;
+  get consumerGroup(): string {
+    return this._consumerGroup;
   }
 
   /**
-   * @property {number} [epoch] The epoch value of the underlying receiver, if present.
+   * @property {number} [ownerLevel] The ownerLevel value of the underlying receiver, if present.
    * @readonly
    */
-  get exclusiveReceiverPriority(): number | undefined {
-    return this._receiverOptions && this._receiverOptions.exclusiveReceiverPriority;
+  get ownerLevel(): number | undefined {
+    return this._receiverOptions && this._receiverOptions.ownerLevel;
   }
 
   /**
    * @internal
    */
-  constructor(context: ConnectionContext, partitionId: string, options?: EventReceiverOptions) {
+  constructor(
+    context: ConnectionContext,
+    consumerGroup: string,
+    partitionId: string,
+    eventPosition: EventPosition,
+    options?: EventHubConsumerOptions
+  ) {
     this._context = context;
+    this._consumerGroup = consumerGroup;
     this._partitionId = partitionId;
+    this._eventPosition = eventPosition;
     this._receiverOptions = options || {};
   }
   /**
@@ -113,9 +129,15 @@ export class EventReceiver {
     }
     const checkpoint = this.getCheckpoint();
     if (checkpoint) {
-      this._receiverOptions.beginReceivingAt = EventPosition.fromSequenceNumber(checkpoint);
+      this._eventPosition = EventPosition.fromSequenceNumber(checkpoint);
     }
-    this._streamingReceiver = StreamingReceiver.create(this._context, this.partitionId, this._receiverOptions);
+    this._streamingReceiver = StreamingReceiver.create(
+      this._context,
+      this.consumerGroup,
+      this.partitionId,
+      this._eventPosition,
+      this._receiverOptions
+    );
     this._streamingReceiver.prefetchCount = Constants.defaultPrefetchCount;
     return this._streamingReceiver.receive(onMessage, onError, abortSignal);
   }
@@ -132,6 +154,9 @@ export class EventReceiver {
     const maxWaitTimeInSeconds = 60;
     while (true) {
       const currentBatch = await this.receiveBatch(maxMessageCount, maxWaitTimeInSeconds, options.abortSignal);
+      if (!currentBatch || !currentBatch.length) {
+        continue;
+      }
       yield currentBatch[0];
     }
   }
@@ -139,7 +164,7 @@ export class EventReceiver {
   /**
    * Closes the underlying AMQP receiver link.
    * Once closed, the receiver cannot be used for any further operations.
-   * Use the `createReceiver` function on the EventHubClient to instantiate
+   * Use the `createConsumer` function on the EventHubClient to instantiate
    * a new Receiver
    *
    * @returns {Promise<void>}
@@ -204,13 +229,25 @@ export class EventReceiver {
     this._throwIfAlreadyReceiving();
     const checkpoint = this.getCheckpoint();
     if (checkpoint) {
-      this._receiverOptions.beginReceivingAt = EventPosition.fromSequenceNumber(checkpoint);
+      this._eventPosition = EventPosition.fromSequenceNumber(checkpoint);
     }
-    if (!this._batchingReceiver) {
-      this._batchingReceiver = BatchingReceiver.create(this._context, this.partitionId, this._receiverOptions);
+    if (!this._batchingReceiver || !this._batchingReceiver.isOpen()) {
+      this._batchingReceiver = BatchingReceiver.create(
+        this._context,
+        this.consumerGroup,
+        this.partitionId,
+        this._eventPosition,
+        this._receiverOptions
+      );
     } else if (this._batchingReceiver.checkpoint < checkpoint!) {
       await this._batchingReceiver.close();
-      this._batchingReceiver = BatchingReceiver.create(this._context, this.partitionId, this._receiverOptions);
+      this._batchingReceiver = BatchingReceiver.create(
+        this._context,
+        this.consumerGroup,
+        this.partitionId,
+        this._eventPosition,
+        this._receiverOptions
+      );
     }
 
     let result: ReceivedEventData[] = [];
@@ -221,6 +258,13 @@ export class EventReceiver {
         this._receiverOptions.retryOptions,
         abortSignal
       );
+      if (result.length < maxMessageCount) {
+       // we are now re-using the same receiver link between multiple calls to receiveBatch() or the iterator on the receiver.
+       // This can result in the receiver link having pending credits if a receiveBatch() call asking for m events returned n events where n < m.
+       // Since Event Hubs doesnt support the drain feature yet, this can result in the receiver link receiving events when the user is not expecting it to.
+       // Hence closing the link when result.length < maxMessageCount
+        await this._batchingReceiver.close();
+      }
     } catch (err) {
       log.error(
         "[%s] Receiver '%s', an error occurred while receiving %d messages for %d max time:\n %O",
@@ -269,7 +313,7 @@ export class EventReceiver {
     if (this.isClosed) {
       const errorMessage =
         `The receiver for "${this._context.config.entityPath}" has been closed and can no longer be used. ` +
-        `Please create a new receiver using the "createReceiver" function on the EventHubClient.`;
+        `Please create a new receiver using the "createConsumer" function on the EventHubClient.`;
       const error = new Error(errorMessage);
       log.error(`[${this._context.connectionId}] %O`, error);
       throw error;
