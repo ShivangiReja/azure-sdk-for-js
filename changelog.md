@@ -1,3 +1,6 @@
+### 2019-7-15 0.1.10
+- A network connection lost error is now treated as retryable error. A new error with name ConnectionLostError is introduced for this scenario.
+
 ### 2018-12-15 0.1.9
 - Added constants for rule and filter descriptors as defined in the [service bus docs](https://docs.microsoft.com/en-us/azure/service-bus-messaging/service-bus-amqp-request-response#rule-operations)
 
